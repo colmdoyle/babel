@@ -1,0 +1,25 @@
+{
+  "name": "Babel",
+  "description": "A sample app for use with the Slack API",
+  "repository": "https://github.com/slackapi/babel",
+  "logo": "https://github.com/slackapi/babel/raw/master/logo.png",
+  "keywords": ["node", "express", "slack"],
+  "addons": ["cleardb:ignite"],
+  "scripts": {
+    "postdeploy": "npm run db:create ; npm run db:migrate; npm run build;"
+  },
+  "env": {
+    "SLACK_CLIENT_ID": {
+      "description": "Issued when you created your app on api.slack.com",
+      "value": ""
+    },
+    "SLACK_CLIENT_SECRET": {
+      "description": "Issued when you created your app on api.slack.com",
+      "value": ""
+    },
+    "SLACK_VERIFICATION_TOKEN": {
+      "description": "Issued when you created your app on api.slack.com",
+      "value": ""
+    }
+  }
+}
