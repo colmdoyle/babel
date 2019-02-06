@@ -13,3 +13,5 @@ build/
 # BBS
 sdt.tar*
 
+.DS_Store
+
