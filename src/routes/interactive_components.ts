@@ -1,5 +1,5 @@
 import express from 'express';
-import { WebClient, MessageAttachment, AttachmentAction, Dialog } from '@slack/client';
+import { WebClient, Dialog } from '@slack/client';
 import models from '../db/models';
 import { reject } from 'bluebird';
 
@@ -31,57 +31,102 @@ router.post('/', (req, res) => {
             },
           },
         }).then((results) => {
-          let text = '';
-          const attachments: MessageAttachment[] = [];
+          const blocks = [];
           if (results.length < 1) {
-            text = "Sorry, we don't have a definition for any of the words in this message";
+            blocks.push(
+              {
+                type: 'section',
+                text: {
+                  type: 'plain_text',
+                  text: "Sorry, we don't have a definition for any of the words in this message",
+                },
+              },
+            );
           } else {
-            text = "Here's some phrases we identified in that message";
+            blocks.push(
+              {
+                type: 'section',
+                text: {
+                  type: 'mrkdwn',
+                  text: `_Babel has found *${results.length}* results_`,
+                },
+              },
+              {
+                type: 'divider',
+              },
+            );
             for (const result of results) {
               const createdTimestamp = new Date(result.createdAt).getTime() / 1000;
-              const editButton: AttachmentAction = {
-                type: 'button',
-                name: 'edit_phrase',
-                text: `Edit ${result.phrase}`,
-                value: `${result.id}`,
-                style: 'primary',
-              };
-              const removeButton: AttachmentAction = {
-                type: 'button',
-                name: 'remove_phrase',
-                text: `Delete ${result.phrase}`,
-                value: `${result.id}`,
-                style: 'danger',
-                confirm: {
-                  title: 'Are you sure?',
-                  // tslint:disable-next-line:max-line-length
-                  text: `This will remove "${result.phrase}" from your organisation's dictionary. This action cannot be undone.`,
-                  ok_text: `Yes, remove "${result.phrase}"`,
-                  dismiss_text: `Keep "${result.phrase}"`,
-                },
-              };
-              attachments.push(
+
+              blocks.push(
                 {
-                  fallback: `*${result.phrase}* : ${result.definition} _Suggested by <@${result.creator}>_`,
-                  title: result.phrase,
-                  text: result.definition,
-                  footer: `Submitted by <@${result.creator}>`,
-                  ts: createdTimestamp.toString(),
-                  callback_id: `action_${result.id}`,
-                  actions: [
-                    editButton,
-                    removeButton,
+                  type: 'section',
+                  text: {
+                    type: 'mrkdwn',
+                    text: `*${result.phrase}*\n${result.definition}`,
+                  },
+                },
+                {
+                  type: 'context',
+                  elements: [
+                    {
+                      type: 'mrkdwn',
+                      // tslint:disable-next-line:max-line-length
+                      text: `Submitted by <@${result.creator}> | <!date^${createdTimestamp}^{date}|${createdTimestamp.toString()}>`,
+                    },
                   ],
                 },
+                {
+                  type: 'actions',
+                  elements: [
+                    {
+                      type: 'button',
+                      text: {
+                        type: 'plain_text',
+                        text: `Edit "${result.phrase}"`,
+                      },
+                      value: `edit_${result.id}`,
+                    },
+                    {
+                      type: 'button',
+                      text: {
+                        type: 'plain_text',
+                        text: `Delete "${result.phrase}"`,
+                      },
+                      value: `delete_${result.id}`,
+                      confirm: {
+                        title: {
+                          type: 'plain_text',
+                          text: 'Are you sure?',
+                        },
+                        text: {
+                          type: 'mrkdwn',
+                          // tslint:disable-next-line:max-line-length
+                          text: `This will remove "${result.phrase}" from your organisation's dictionary. This action cannot be undone.`,
+                        },
+                        confirm: {
+                          type: 'plain_text',
+                          text: `Yes, remove "${result.phrase}"`,
+                        },
+                        deny: {
+                          type: 'plain_text',
+                          text: `Keep "${result.phrase}"`,
+                        },
+                      },
+                    },
+                  ],
+                },
+                {
+                  type: 'divider',
+                },
               );
-
             }
           }
 
           web.chat.postEphemeral(
             {
-              text,
-              attachments,
+              blocks,
+              text: '',
               channel: payload.channel.id,
               user: payload.user.id,
             });
@@ -135,21 +180,22 @@ router.post('/', (req, res) => {
         }
 
         break;
-      case 'interactive_message':
-        payload.actions.forEach(({ name, value }: { name: string, value: string }) =>
-          actionTypeResponses[name](value, payload)
-            .then(result => res.send(result))
-            .catch(error => res.send(error)),
-        );
+      case 'block_actions':
+        const [command, value] = payload.actions[0].value.split('_');
+        actionTypeResponses[command](value, payload)
+          .then(result => res.send(result))
+          .catch(error => res.send(error));
         break;
       default:
+        console.error(`Unknown payload type ${payload.type}`);
+        return;
         break;
     }
   });
 });
 
 const actionTypeResponses: { [action: string]: (s: string, p: any) => Promise<any> } = {
-  remove_phrase: (value: string, payload: any) => {
+  delete: (value: string, payload: any) => {
     return new Promise((resolve) => {
       models.Jargon.destroy({
         where: {
@@ -173,7 +219,7 @@ const actionTypeResponses: { [action: string]: (s: string, p: any) => Promise<an
         });
     });
   },
-  edit_phrase: (value: string, payload: any) => {
+  edit: (value: string, payload: any) => {
     return new Promise((resolve) => {
       models.Install.findOne({
         where: {
@@ -190,7 +236,7 @@ const actionTypeResponses: { [action: string]: (s: string, p: any) => Promise<an
 
           const dialog: Dialog = {
             callback_id: 'jargon-submit',
-            title: `Update meaning of ${jargon.phrase}` ,
+            title: `Update meaning of ${jargon.phrase}`,
             elements: [
               {
                 type: 'textarea',
@@ -202,7 +248,7 @@ const actionTypeResponses: { [action: string]: (s: string, p: any) => Promise<an
             state: `${jargon.phrase}`,
           };
 
-          web.dialog.open({ dialog, trigger_id: payload.trigger_id  });
+          web.dialog.open({ dialog, trigger_id: payload.trigger_id });
           resolve();
 
         });
