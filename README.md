@@ -1,3 +1,7 @@
+# ARCHIVED
+
+This piece of sample code has been archived. For more up to date samples, check out some of the other repositories on https://github.com/slackapi
+
 # Babel
 
 A Slack API sample of an application for "translating" your company's internal lingo. Helps new hires by allowing them to get a definition of phrases like "OKR" without having to ask
