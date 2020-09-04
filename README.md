@@ -1,6 +1,6 @@
 # ARCHIVED
 
-This piece of sample code has been archived. For more up to date samples, check out some of the other repositories on https://github.com/slackapi
+This piece of sample code has been archived. If you are interested in this type of app, you'll probably like [this repository](https://github.com/slackapi/definition-app)
 
 # Babel
 
